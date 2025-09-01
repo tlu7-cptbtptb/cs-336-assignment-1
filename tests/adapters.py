@@ -20,6 +20,8 @@ from torch import Tensor
 from .embedding import Embedding
 
 from .linear import Linear
+from .rmsnorm import RMSNorm
+from .swiglu import SwiGLU
 from .tokenizer import Tokenizer
 
 
@@ -99,7 +101,12 @@ def run_swiglu(
     # swiglu.w1.weight.data = w1_weight
     # swiglu.w2.weight.data = w2_weight
     # swiglu.w3.weight.data = w3_weight
-    raise NotImplementedError
+    swiglu = SwiGLU(d_model=d_model, dim_ff=d_ff)
+
+    swiglu.load_state_dict(
+        {"w1_weight": w1_weight, "w2_weight": w2_weight, "w3_weight": w3_weight}
+    )
+    return swiglu(in_features)
 
 
 def run_scaled_dot_product_attention(
@@ -394,7 +401,9 @@ def run_rmsnorm(
         Float[Tensor,"... d_model"]: Tensor of with the same shape as `in_features` with the output of running
         RMSNorm of the `in_features`.
     """
-    raise NotImplementedError
+    rmsnorm = RMSNorm(d_model=d_model, eps=eps)
+    rmsnorm.load_state_dict({"gains": weights})
+    return rmsnorm(in_features)
 
 
 def run_silu(in_features: Float[Tensor, " ..."]) -> Float[Tensor, " ..."]:
