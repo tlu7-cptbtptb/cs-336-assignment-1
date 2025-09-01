@@ -17,6 +17,9 @@ from jaxtyping import Float, Int
 
 from torch import Tensor
 
+from .embedding import Embedding
+
+from .linear import Linear
 from .tokenizer import Tokenizer
 
 
@@ -38,8 +41,9 @@ def run_linear(
     Returns:
         Float[Tensor, "... d_out"]: The transformed output of your linear module.
     """
-
-    raise NotImplementedError
+    linear_module = Linear(in_features=d_in, out_features=d_out)
+    linear_module.load_state_dict({"weights": weights})
+    return linear_module(in_features)
 
 
 def run_embedding(
@@ -61,7 +65,9 @@ def run_embedding(
         Float[Tensor, "... d_model"]: Batch of embeddings returned by your Embedding layer.
     """
 
-    raise NotImplementedError
+    embedding = Embedding(num_embeddings=vocab_size, embedding_dim=d_model)
+    embedding.load_state_dict({"embedding_lookup": weights})
+    return embedding(token_ids)
 
 
 def run_swiglu(
@@ -734,7 +740,6 @@ def pretokenize_on_text(
             pretoken = s.group(0).encode("utf-8")  # str to bytes
             bytes_tuple: tuple[bytes, ...] = tuple(bytes([a]) for a in pretoken)  #
             pretoken_count[bytes_tuple] = pretoken_count.get(bytes_tuple, 0) + 1
-    print("tlu7... pretoken_count ", len(pretoken_count))
     return pretoken_count
 
 
