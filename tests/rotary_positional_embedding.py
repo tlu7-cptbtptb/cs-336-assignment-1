@@ -18,12 +18,18 @@ class RotaryPositionalEmbedding(torch.nn.Module):
         self.register_buffer("cos_cached", torch.cos(freqs), persistent=False)
         self.register_buffer("sin_cached", torch.sin(freqs), persistent=False)
 
-    def forward(self, x: torch.Tensor, token_positions: torch.Tensor) -> torch.Tensor:
+    def forward(
+        self, x: torch.Tensor, token_positions: torch.Tensor = None
+    ) -> torch.Tensor:
         # x: [*, seq_len, d_k]
         # token_positions: [*, seq_len]
         # Get cos/sin for each token position
-        cos = self.cos_cached[token_positions]  # [..., seq_len, d_k//2]
-        sin = self.sin_cached[token_positions]  # [..., seq_len, d_k//2]
+        if token_positions:
+            cos = self.cos_cached[token_positions]  # [..., seq_len, d_k//2]
+            sin = self.sin_cached[token_positions]  # [..., seq_len, d_k//2]
+        else:
+            cos = self.cos_cached[None, : x.shape[-2], :]  # [..., seq_len, d_k//2]
+            sin = self.sin_cached[None, : x.shape[-2], :]  # [..., seq_len, d_k//2]
         # Split x into even and odd dims
         x_even = x[..., ::2]  # [..., seq_len, d_k//2]
         x_odd = x[..., 1::2]  # [..., seq_len, d_k//2]

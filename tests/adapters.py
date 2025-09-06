@@ -25,6 +25,7 @@ from .rotary_positional_embedding import RotaryPositionalEmbedding
 from .self_attention import MultiHeadSelfAttention, ScaledDotProductAttention
 from .swiglu import SwiGLU
 from .tokenizer import Tokenizer
+from .transformer import TransformerBlock
 from .util_layers import softmax
 
 
@@ -323,7 +324,37 @@ def run_transformer_block(
         Float[Tensor, "batch sequence_length d_model"] Tensor with the output of
         running the Transformer block on the input features while using RoPE.
     """
-    raise NotImplementedError
+
+    transformer = TransformerBlock(
+        d_model=d_model,
+        num_heads=num_heads,
+        d_ff=d_ff,
+        theta=theta,
+        max_seq_len=max_seq_len,
+    )
+
+    transformer.rms1.load_state_dict({"gains": weights["ln1.weight"]})
+
+    transformer.mha.load_state_dict(
+        {
+            "q_proj_weight": weights["attn.q_proj.weight"],
+            "k_proj_weight": weights["attn.k_proj.weight"],
+            "v_proj_weight": weights["attn.v_proj.weight"],
+            "o_proj_weight": weights["attn.output_proj.weight"],
+        }
+    )
+
+    transformer.rms2.load_state_dict({"gains": weights["ln2.weight"]})
+
+    transformer.swiglu.load_state_dict(
+        {
+            "w1_weight": weights["ffn.w1.weight"],
+            "w2_weight": weights["ffn.w2.weight"],
+            "w3_weight": weights["ffn.w3.weight"],
+        }
+    )
+
+    return transformer(in_features)
 
 
 def run_transformer_lm(
