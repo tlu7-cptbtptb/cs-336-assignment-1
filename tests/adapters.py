@@ -22,8 +22,10 @@ from .embedding import Embedding
 from .linear import Linear
 from .rmsnorm import RMSNorm
 from .rotary_positional_embedding import RotaryPositionalEmbedding
+from .self_attention import ScaledDotProductAttention
 from .swiglu import SwiGLU
 from .tokenizer import Tokenizer
+from .util_layers import softmax
 
 
 def run_linear(
@@ -128,7 +130,8 @@ def run_scaled_dot_product_attention(
     Returns:
         Float[Tensor, " ... queries d_v"]: Output of SDPA
     """
-    raise NotImplementedError
+    attention_layer = ScaledDotProductAttention()
+    return attention_layer(Q, K, V, mask)
 
 
 def run_multihead_self_attention(
@@ -458,7 +461,7 @@ def run_softmax(in_features: Float[Tensor, " ..."], dim: int) -> Float[Tensor, "
         Float[Tensor, "..."]: Tensor of with the same shape as `in_features` with the output of
         softmax normalizing the specified `dim`.
     """
-    raise NotImplementedError
+    return softmax(in_features, dim=dim)
 
 
 def run_cross_entropy(
