@@ -25,7 +25,7 @@ from .rotary_positional_embedding import RotaryPositionalEmbedding
 from .self_attention import MultiHeadSelfAttention, ScaledDotProductAttention
 from .swiglu import SwiGLU
 from .tokenizer import Tokenizer
-from .transformer import TransformerBlock
+from .transformer import Transformer, TransformerBlock
 from .util_layers import softmax
 
 
@@ -436,7 +436,45 @@ def run_transformer_lm(
         Float[Tensor, "batch_size sequence_length vocab_size"]: Tensor with the predicted unnormalized
         next-word distribution for each token.
     """
-    raise NotImplementedError
+    transformer_lm = Transformer(
+        vocab_size=vocab_size,
+        d_model=d_model,
+        context_length=context_length,
+        num_layers=num_layers,
+        num_heads=num_heads,
+        d_ff=d_ff,
+        theta=rope_theta,
+        max_seq_len=context_length,
+    )
+    transformer_lm.embedding.load_state_dict(
+        {"embedding_lookup": weights["token_embeddings.weight"]}
+    )
+
+    for i in range(num_layers):
+        transformer_lm.transformer_blocks[i].mha.load_state_dict(
+            {
+                "q_proj_weight": weights[f"layers.{i}.attn.q_proj.weight"],
+                "k_proj_weight": weights[f"layers.{i}.attn.k_proj.weight"],
+                "v_proj_weight": weights[f"layers.{i}.attn.v_proj.weight"],
+                "o_proj_weight": weights[f"layers.{i}.attn.output_proj.weight"],
+            }
+        )
+        transformer_lm.transformer_blocks[i].rms1.load_state_dict(
+            {"gains": weights[f"layers.{i}.ln1.weight"]}
+        )
+        transformer_lm.transformer_blocks[i].rms2.load_state_dict(
+            {"gains": weights[f"layers.{i}.ln2.weight"]}
+        )
+        transformer_lm.transformer_blocks[i].swiglu.load_state_dict(
+            {
+                "w1_weight": weights[f"layers.{i}.ffn.w1.weight"],
+                "w2_weight": weights[f"layers.{i}.ffn.w2.weight"],
+                "w3_weight": weights[f"layers.{i}.ffn.w3.weight"],
+            }
+        )
+    transformer_lm.rms_norm_final.load_state_dict({"gains": weights["ln_final.weight"]})
+    transformer_lm.llm_output.load_state_dict({"weights": weights["lm_head.weight"]})
+    return transformer_lm(in_indices)
 
 
 def run_rmsnorm(
