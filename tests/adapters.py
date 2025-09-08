@@ -26,7 +26,7 @@ from .self_attention import MultiHeadSelfAttention, ScaledDotProductAttention
 from .swiglu import SwiGLU
 from .tokenizer import Tokenizer
 from .transformer import Transformer, TransformerBlock
-from .util_layers import softmax
+from .util_layers import cross_entropy_loss, softmax
 
 
 def run_linear(
@@ -570,7 +570,7 @@ def run_cross_entropy(
     Returns:
         Float[Tensor, ""]: The average cross-entropy loss across examples.
     """
-    raise NotImplementedError
+    return cross_entropy_loss(predicted_logits=inputs, targets=targets)
 
 
 def run_gradient_clipping(

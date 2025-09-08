@@ -120,7 +120,7 @@ class MultiHeadSelfAttention(torch.nn.Module):
             Q_i = Wq_x[..., i * self.d_k : (i + 1) * self.d_k]
             K_i = Wk_x[..., i * self.d_k : (i + 1) * self.d_k]
             V_i = Wv_x[..., i * self.d_v : (i + 1) * self.d_v]
-            if rope is not None:
+            if rope is not None:                
                 Q_i = rope(Q_i, token_positions)
                 K_i = rope(K_i, token_positions)
             mask = (1 - torch.triu(torch.ones(seq_len, seq_len), diagonal=1)).bool()

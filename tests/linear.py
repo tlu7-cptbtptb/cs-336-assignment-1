@@ -4,7 +4,7 @@ from einops import einsum
 
 
 class Linear(torch.nn.Module):
-    def __init__(self, in_features, out_features, device=None, dtype=None):
+    def __init__(self, in_features: int, out_features: int, device=None, dtype=None):
         """
         Construct a linear transformation module. This function should accept the following parameters:
         in_features: int final dimension of the input
