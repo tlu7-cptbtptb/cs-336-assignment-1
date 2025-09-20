@@ -20,7 +20,7 @@ from torch import Tensor
 from .embedding import Embedding
 
 from .linear import Linear
-from .optimizer import AdamW, SGD
+from .optimizer import AdamW, learning_rate_schedule, SGD
 from .rmsnorm import RMSNorm
 from .rotary_positional_embedding import RotaryPositionalEmbedding
 from .self_attention import MultiHeadSelfAttention, ScaledDotProductAttention
@@ -620,7 +620,13 @@ def run_get_lr_cosine_schedule(
     Returns:
         Learning rate at the given iteration under the specified schedule.
     """
-    raise NotImplementedError
+    return learning_rate_schedule(
+        t=it,
+        alpha_min=min_learning_rate,
+        alpha_max=max_learning_rate,
+        t_warmup=warmup_iters,
+        t_c=cosine_cycle_iters,
+    )
 
 
 def run_save_checkpoint(
