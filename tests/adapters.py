@@ -20,7 +20,7 @@ from torch import Tensor
 from .embedding import Embedding
 
 from .linear import Linear
-from .optimizer import AdamW, learning_rate_schedule, SGD
+from .optimizer import AdamW, gradient_clipping, learning_rate_schedule, SGD
 from .rmsnorm import RMSNorm
 from .rotary_positional_embedding import RotaryPositionalEmbedding
 from .self_attention import MultiHeadSelfAttention, ScaledDotProductAttention
@@ -585,7 +585,7 @@ def run_gradient_clipping(
 
     The gradients of the parameters (parameter.grad) should be modified in-place.
     """
-    raise NotImplementedError
+    gradient_clipping(params=parameters, max_l2_norm=max_l2_norm)
 
 
 def get_adamw_cls() -> Any:
