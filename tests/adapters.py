@@ -28,6 +28,7 @@ from .swiglu import SwiGLU
 from .tokenizer import Tokenizer
 from .transformer import Transformer, TransformerBlock
 from .util_layers import cross_entropy_loss, softmax
+from .data_loader import data_loading
 
 
 def run_linear(
@@ -537,7 +538,7 @@ def run_get_batch(
         is the sampled input sequences, and the second tuple item is the corresponding
         language modeling labels.
     """
-    raise NotImplementedError
+    return data_loading(dataset=dataset, batch_size=batch_size, context_length=context_length, device=device)
 
 
 def run_softmax(in_features: Float[Tensor, " ..."], dim: int) -> Float[Tensor, " ..."]:
