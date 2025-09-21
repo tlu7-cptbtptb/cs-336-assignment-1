@@ -17,6 +17,9 @@ from jaxtyping import Float, Int
 
 from torch import Tensor
 
+from .checkpoint_util import load_checkpoint, save_checkpoint
+from .data_loader import data_loading
+
 from .embedding import Embedding
 
 from .linear import Linear
@@ -28,7 +31,6 @@ from .swiglu import SwiGLU
 from .tokenizer import Tokenizer
 from .transformer import Transformer, TransformerBlock
 from .util_layers import cross_entropy_loss, softmax
-from .data_loader import data_loading
 
 
 def run_linear(
@@ -538,7 +540,12 @@ def run_get_batch(
         is the sampled input sequences, and the second tuple item is the corresponding
         language modeling labels.
     """
-    return data_loading(dataset=dataset, batch_size=batch_size, context_length=context_length, device=device)
+    return data_loading(
+        dataset=dataset,
+        batch_size=batch_size,
+        context_length=context_length,
+        device=device,
+    )
 
 
 def run_softmax(in_features: Float[Tensor, " ..."], dim: int) -> Float[Tensor, " ..."]:
@@ -646,7 +653,7 @@ def run_save_checkpoint(
             we've completed.
         out (str | os.PathLike | BinaryIO | IO[bytes]): Path or file-like object to serialize the model, optimizer, and iteration to.
     """
-    raise NotImplementedError
+    save_checkpoint(model=model, optimizer=optimizer, iteration=iteration, out=out)
 
 
 def run_load_checkpoint(
@@ -667,7 +674,7 @@ def run_load_checkpoint(
     Returns:
         int: the previously-serialized number of iterations.
     """
-    raise NotImplementedError
+    return load_checkpoint(src=src, model=model, optimizer=optimizer)
 
 
 def get_tokenizer(

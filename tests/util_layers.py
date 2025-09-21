@@ -42,3 +42,5 @@ def cross_entropy_loss(
     loss = target_logits - denom  # [batch_size, seq_len, 1]
     loss *= -1  # [batch_size, seq_len, 1]
     return loss.mean()
+
+
