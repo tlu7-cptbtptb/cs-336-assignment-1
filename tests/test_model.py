@@ -20,7 +20,9 @@ from .adapters import (
 )
 from .tokenizer import *
 from .data_loader import data_loading
+from .optimizer import AdamW, gradient_clipping, learning_rate_schedule, SGD
 from .transformer import Transformer, TransformerBlock
+from .util_layers import cross_entropy_loss, softmax
 
 
 def test_linear(numpy_snapshot, ts_state_dict, in_embeddings, d_model, d_ff):
@@ -253,6 +255,52 @@ def test_silu_matches_pytorch():
     )
 
 
+def test_load_one_batch(
+    dataset: numpy.ndarray, tokenizer: Any, context_length: int = 16
+) -> None:
+    batch = data_loading(
+        dataset=dataset, batch_size=4, context_length=context_length, device="cpu"
+    )
+    print("batch, ", batch[0])
+    for i in range(4):
+        print(i, tokenizer.decode(batch[0][i].tolist()))
+        print("---")
+        print(i, tokenizer.decode(batch[1][i].tolist()))
+        print("---")
+
+
+def train_step(
+    model: Transformer,
+    optimizer: torch.optim.Optimizer,
+    input: torch.Tensor,
+    target: torch.Tensor,
+):
+    model.train()
+    optimizer.zero_grad()
+    predicted_logits = model(input)
+    loss = cross_entropy_loss(predicted_logits, target)
+    loss.backward()
+    optimizer.step()
+    return loss.item()
+
+
+def get_optimizer(
+    model: Transformer,
+    lr: float = 0.001,
+    beta1: float = 0.9,
+    beta2: float = 0.99,
+    weight_decay: float = 0.01,
+    eps: float = 1e-8,
+) -> torch.optim.Optimizer:
+    return AdamW(
+        params=model.parameters(),
+        lr=lr,
+        betas=(beta1, beta2),
+        weight_decay=weight_decay,
+        eps=eps,
+    )
+
+
 def test_main(
     vocab_size: int = 10000,
     context_length: int = 16,
@@ -269,6 +317,21 @@ def test_main(
     )
     tokenizer = get_tokenizer(vocab, merges, special_tokens=["<|endoftext|>"])
 
+    with open(input_path, "r") as f:
+        corpus = f.read()
+    token_ids = tokenizer.encode(corpus)
+    print("len token_ids, ", len(token_ids))
+
+    dataset = numpy.array(token_ids, dtype=numpy.int32)
+    # Save to disk in .npy format (efficient for memmap)
+    numpy.save("tokens.npy", dataset)
+
+    dataset = numpy.load("tokens.npy", mmap_mode="r")  # read-only
+
+    # sanity check
+    # test_load_one_batch(dataset, tokenizer, context_length=context_length)
+
+    # model and optimizer initialization
     transformer = Transformer(
         vocab_size=vocab_size,
         context_length=context_length,
@@ -279,23 +342,16 @@ def test_main(
         theta=rope_theta,
         max_seq_len=context_length,
     )
-    with open(input_path, "r") as f:
-        corpus = f.read()
-    token_ids = tokenizer.encode(corpus)
-    print("len token_ids, ", len(token_ids))
+    optimizer = get_optimizer(model=transformer)
 
-    dataset = numpy.array(token_ids, dtype=numpy.int32)
-    # # Save to disk in .npy format (efficient for memmap)
-    # numpy.save("tokens.npy", dataset)
-
-    # dataset = numpy.load("tokens.npy", mmap_mode="r")  # read-only
-
-    batch = data_loading(
-        dataset=dataset, batch_size=4, context_length=context_length, device="cpu"
-    )
-    print("batch, ", batch[0])
-    for i in range(4):
-        print(i, tokenizer.decode(batch[0][i].tolist()))
-        print("---")
-        print(i, tokenizer.decode(batch[1][i].tolist()))
-        print("---")
+    # training loop
+    for _ in range(100):
+        batch = data_loading(
+            dataset=dataset, batch_size=4, context_length=context_length, device="cpu"
+        )
+        input = batch[0]
+        target = batch[1]
+        loss = train_step(
+            model=transformer, optimizer=optimizer, input=input, target=target
+        )
+        print("loss, ", loss)

@@ -82,6 +82,7 @@ class AdamW(torch.optim.Optimizer):
                 t = state.get(
                     "t", 1
                 )  # Get iteration number from the state, or initial value.
+
                 lr_adjusted = lr * math.sqrt(1 - beta2**t) / (1 - beta1**t)
                 p.data -= (
                     lr_adjusted
