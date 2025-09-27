@@ -27,20 +27,20 @@ def generate_text(
         next_token_logits = model_output[0, -1, :]
         next_token_logits = next_token_logits / temperature
         next_token_probs = softmax(next_token_logits, dim=-1)
+
         sampled_next_token = torch.multinomial(next_token_probs, num_samples=1)[
             0
         ]  # tensor of shape (1, )
-
-        output_seq.append(sampled_next_token)
+        # convert to int type tensor
+        sampled_next_token = torch.tensor(sampled_next_token, dtype=torch.int64)
+        output_seq.append(sampled_next_token.item())
         prompt = torch.cat(
             [
-                prompt,
-                sampled_next_token.view(
-                    1,
-                ),
-            ]
+                prompt[:, 1:],
+                sampled_next_token.view(1, 1),
+            ],
+            dim=1,
         )
         if len(output_seq) >= max_gen_len or sampled_next_token == end_of_text_token:
             has_completed = True
-
-    return torch.Tensor(output_seq)
+    return torch.tensor(output_seq, dtype=torch.int32)

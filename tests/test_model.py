@@ -20,6 +20,7 @@ from .adapters import (
 )
 from .tokenizer import *
 from .data_loader import data_loading
+from .generate_text_util import generate_text
 from .optimizer import AdamW, gradient_clipping, learning_rate_schedule, SGD
 from .transformer import Transformer, TransformerBlock
 from .util_layers import cross_entropy_loss, softmax
@@ -301,9 +302,39 @@ def get_optimizer(
     )
 
 
+def generate_text_for_test_input(
+    test_input: str | None,
+    transformer: Transformer,
+    tokenizer: Any,
+    end_of_text_token_id: int,
+    context_length: int = 64,
+    max_gen_len: int = 64,
+    temperature: float = 1.0,
+) -> None:
+    """
+    Sanity check the model by generating text from a given input sentence.
+    """
+    default_test_input = "Once upon a time, in a warm and sunny place, there was a big pit. A little boy named Tom liked to play near the pit. One day, Tom lost his red ball. He was very sad.\
+                          Tom asked his friend, Sam, to help him search for the ball. They looked high and low, but"
+    test_input = test_input or default_test_input
+    test_input = tokenizer.encode(test_input)
+    test_input = test_input[:context_length]
+    test_input = torch.tensor(test_input, dtype=torch.long, device="cpu")
+    test_input = test_input.view(1, -1)
+    test_output = generate_text(
+        prompt=test_input,
+        model=transformer,
+        end_of_text_token=end_of_text_token_id,
+        max_gen_len=max_gen_len,
+        temperature=temperature,
+    )
+    test_output = tokenizer.decode(test_output.tolist())
+    print("test_output, ", test_output)
+
+
 def test_main(
     vocab_size: int = 10000,
-    context_length: int = 16,
+    context_length: int = 64,
     d_model: int = 512,
     d_ff: int = 1344,
     rope_theta: float = 10000.0,
@@ -313,9 +344,14 @@ def test_main(
     # tokenizer training
     input_path = "/Users/tlu7/git_proj/stanford_336/cs-336-assignment-1/data/TinyStoriesV2-GPT4-train_100.txt"
     vocab, merges = run_train_bpe(
-        input_path=input_path, vocab_size=1000, special_tokens=["<|endoftext|>"]
+        input_path=input_path, vocab_size=vocab_size, special_tokens=["<|endoftext|>"]
     )
     tokenizer = get_tokenizer(vocab, merges, special_tokens=["<|endoftext|>"])
+    end_of_text_token_id = None
+    for i in range(len(vocab)):
+        if vocab[i] == "<|endoftext|>".encode("utf-8"):
+            end_of_text_token_id = i
+            break
 
     with open(input_path, "r") as f:
         corpus = f.read()
@@ -344,8 +380,13 @@ def test_main(
     )
     optimizer = get_optimizer(model=transformer)
 
+    # sanity check
+    test_input = "Once upon a time, in a warm and sunny place, there was a big pit. A little boy named Tom liked to play near the pit. One day, Tom lost his red ball. He was very sad.\
+                            Tom asked his friend, Sam, to help him search for the ball. "
+    test_input = tokenizer.encode(test_input)
+
     # training loop
-    for _ in range(100):
+    for step in range(1000):
         batch = data_loading(
             dataset=dataset, batch_size=4, context_length=context_length, device="cpu"
         )
@@ -355,3 +396,12 @@ def test_main(
             model=transformer, optimizer=optimizer, input=input, target=target
         )
         print("loss, ", loss)
+
+        if step % 50 == 0:
+            generate_text_for_test_input(
+                test_input=None,
+                transformer=transformer,
+                tokenizer=tokenizer,
+                end_of_text_token_id=end_of_text_token_id,
+                max_gen_len=64,
+            )
