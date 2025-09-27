@@ -1,5 +1,5 @@
 import pickle
-from typing import Any, Iterable, Iterator, List, Optional, Tuple, Union
+from typing import Any, Iterable, Iterator
 
 import regex as re
 

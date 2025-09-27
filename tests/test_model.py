@@ -16,7 +16,8 @@ from .adapters import (
     run_linear,
     run_embedding,
 )
-
+from .adapters import run_train_bpe, get_tokenizer
+from .tokenizer import *
 
 def test_linear(numpy_snapshot, ts_state_dict, in_embeddings, d_model, d_ff):
     w1_weight = ts_state_dict[0]["layers.0.ffn.w1.weight"]
@@ -200,3 +201,11 @@ def test_silu_matches_pytorch():
     expected_output = F.silu(x)
     actual_output = run_silu(x)
     numpy.testing.assert_allclose(actual_output.detach().numpy(), expected_output.detach().numpy(), atol=1e-6)
+
+
+def test_main():
+    input_path = "/Users/tlu7/git_proj/stanford_336/cs-336-assignment-1/data/TinyStoriesV2-GPT4-train_100.txt"
+
+    vocab, merges = run_train_bpe(input_path=input_path, vocab_size=1000, special_tokens=['<|endoftext|>'])
+    for i in range(1000):
+        print((i, vocab[i]))
