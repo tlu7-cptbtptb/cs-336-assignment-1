@@ -1,23 +1,27 @@
-from einops import rearrange
 import numpy
 import torch
 import torch.nn.functional as F
+from einops import rearrange
 
 from .adapters import (
-    run_multihead_self_attention_with_rope,
-    run_rope,
-    run_silu,
+    get_tokenizer,
+    run_embedding,
+    run_linear,
     run_multihead_self_attention,
-    run_swiglu,
+    run_multihead_self_attention_with_rope,
     run_rmsnorm,
+    run_rope,
     run_scaled_dot_product_attention,
+    run_silu,
+    run_swiglu,
+    run_train_bpe,
     run_transformer_block,
     run_transformer_lm,
-    run_linear,
-    run_embedding,
 )
-from .adapters import run_train_bpe, get_tokenizer
 from .tokenizer import *
+from .data_loader import data_loading
+from .transformer import Transformer, TransformerBlock
+
 
 def test_linear(numpy_snapshot, ts_state_dict, in_embeddings, d_model, d_ff):
     w1_weight = ts_state_dict[0]["layers.0.ffn.w1.weight"]
@@ -42,7 +46,9 @@ def test_embedding(numpy_snapshot, ts_state_dict, in_indices, vocab_size, d_mode
 
 
 def test_swiglu(numpy_snapshot, ts_state_dict, in_embeddings, d_model, d_ff):
-    w1_weight, w2_weight, w3_weight = [ts_state_dict[0][f"layers.0.ffn.{k}.weight"] for k in ["w1", "w2", "w3"]]
+    w1_weight, w2_weight, w3_weight = [
+        ts_state_dict[0][f"layers.0.ffn.{k}.weight"] for k in ["w1", "w2", "w3"]
+    ]
 
     actual_output = run_swiglu(
         d_model=d_model,
@@ -65,7 +71,10 @@ def test_scaled_dot_product_attention(numpy_snapshot, q, k, v, mask):
 
 def test_4d_scaled_dot_product_attention(numpy_snapshot, q, k, v, mask):
     # Shape: (batch_size, num_heads, seq_len, d_k)
-    q, k, v = (rearrange(x, "(batch head) seq d -> batch head seq d", head=2) for x in (q, k, v))
+    q, k, v = (
+        rearrange(x, "(batch head) seq d -> batch head seq d", head=2)
+        for x in (q, k, v)
+    )
     mask = rearrange(mask, "(batch head) query key -> batch head query key", head=2)
 
     actual_output = run_scaled_dot_product_attention(Q=q, K=k, V=v, mask=mask)
@@ -75,7 +84,9 @@ def test_4d_scaled_dot_product_attention(numpy_snapshot, q, k, v, mask):
     )
 
 
-def test_multihead_self_attention(numpy_snapshot, in_embeddings, d_model, n_heads, ts_state_dict):
+def test_multihead_self_attention(
+    numpy_snapshot, in_embeddings, d_model, n_heads, ts_state_dict
+):
     d, _ = ts_state_dict
     q_proj_weight, k_proj_weight, v_proj_weight, o_proj_weight = [
         d[f"layers.0.attn.{k}_proj.weight"] for k in ["q", "k", "v", "output"]
@@ -93,7 +104,14 @@ def test_multihead_self_attention(numpy_snapshot, in_embeddings, d_model, n_head
 
 
 def test_multihead_self_attention_with_rope(
-    numpy_snapshot, in_embeddings, d_model, n_heads, ts_state_dict, n_keys, theta, pos_ids
+    numpy_snapshot,
+    in_embeddings,
+    d_model,
+    n_heads,
+    ts_state_dict,
+    n_keys,
+    theta,
+    pos_ids,
 ):
     d, _ = ts_state_dict
     q_proj_weight, k_proj_weight, v_proj_weight, o_proj_weight = [
@@ -116,7 +134,16 @@ def test_multihead_self_attention_with_rope(
 
 
 def test_transformer_lm(
-    numpy_snapshot, vocab_size, n_keys, d_model, n_layers, n_heads, d_ff, theta, ts_state_dict, in_indices
+    numpy_snapshot,
+    vocab_size,
+    n_keys,
+    d_model,
+    n_layers,
+    n_heads,
+    d_ff,
+    theta,
+    ts_state_dict,
+    in_indices,
 ):
     state_dict, _ = ts_state_dict
 
@@ -135,7 +162,16 @@ def test_transformer_lm(
 
 
 def test_transformer_lm_truncated_input(
-    numpy_snapshot, vocab_size, n_keys, d_model, n_layers, n_heads, d_ff, theta, ts_state_dict, in_indices
+    numpy_snapshot,
+    vocab_size,
+    n_keys,
+    d_model,
+    n_layers,
+    n_heads,
+    d_ff,
+    theta,
+    ts_state_dict,
+    in_indices,
 ):
     in_indices_truncated = in_indices[..., : in_indices.shape[-1] // 2]
     truncated_actual_output = run_transformer_lm(
@@ -156,8 +192,14 @@ def test_transformer_lm_truncated_input(
     )
 
 
-def test_transformer_block(numpy_snapshot, ts_state_dict, in_embeddings, d_model, n_heads, d_ff, n_keys, theta):
-    block_weights = {k.replace("layers.0.", ""): v for k, v in ts_state_dict[0].items() if "layers.0." in k}
+def test_transformer_block(
+    numpy_snapshot, ts_state_dict, in_embeddings, d_model, n_heads, d_ff, n_keys, theta
+):
+    block_weights = {
+        k.replace("layers.0.", ""): v
+        for k, v in ts_state_dict[0].items()
+        if "layers.0." in k
+    }
 
     actual_output = run_transformer_block(
         d_model=d_model,
@@ -179,14 +221,20 @@ def test_rmsnorm(numpy_snapshot, ts_state_dict, in_embeddings):
     reference_weights = state_dict["layers.1.ln1.weight"]
     d_model = reference_weights.shape[0]
 
-    actual_output = run_rmsnorm(d_model=d_model, eps=1e-5, weights=reference_weights, in_features=in_embeddings)
+    actual_output = run_rmsnorm(
+        d_model=d_model, eps=1e-5, weights=reference_weights, in_features=in_embeddings
+    )
 
     numpy_snapshot.assert_match(actual_output, atol=1e-6)
 
 
 def test_rope(numpy_snapshot, in_embeddings, d_model, theta, n_queries, pos_ids):
     output = run_rope(
-        d_model, theta=theta, max_seq_len=n_queries, in_query_or_key=in_embeddings, token_positions=pos_ids
+        d_model,
+        theta=theta,
+        max_seq_len=n_queries,
+        in_query_or_key=in_embeddings,
+        token_positions=pos_ids,
     )
     numpy_snapshot.assert_match(output, atol=1e-6)
 
@@ -200,12 +248,54 @@ def test_silu_matches_pytorch():
     )
     expected_output = F.silu(x)
     actual_output = run_silu(x)
-    numpy.testing.assert_allclose(actual_output.detach().numpy(), expected_output.detach().numpy(), atol=1e-6)
+    numpy.testing.assert_allclose(
+        actual_output.detach().numpy(), expected_output.detach().numpy(), atol=1e-6
+    )
 
 
-def test_main():
+def test_main(
+    vocab_size: int = 10000,
+    context_length: int = 16,
+    d_model: int = 512,
+    d_ff: int = 1344,
+    rope_theta: float = 10000.0,
+    num_layers: int = 4,
+    num_heads: int = 16,
+):
+    # tokenizer training
     input_path = "/Users/tlu7/git_proj/stanford_336/cs-336-assignment-1/data/TinyStoriesV2-GPT4-train_100.txt"
+    vocab, merges = run_train_bpe(
+        input_path=input_path, vocab_size=1000, special_tokens=["<|endoftext|>"]
+    )
+    tokenizer = get_tokenizer(vocab, merges, special_tokens=["<|endoftext|>"])
 
-    vocab, merges = run_train_bpe(input_path=input_path, vocab_size=1000, special_tokens=['<|endoftext|>'])
-    for i in range(1000):
-        print((i, vocab[i]))
+    transformer = Transformer(
+        vocab_size=vocab_size,
+        context_length=context_length,
+        num_layers=num_layers,
+        d_model=d_model,
+        d_ff=d_ff,
+        num_heads=num_heads,
+        theta=rope_theta,
+        max_seq_len=context_length,
+    )
+    with open(input_path, "r") as f:
+        corpus = f.read()
+    token_ids = tokenizer.encode(corpus)
+    print("len token_ids, ", len(token_ids))
+
+    dataset = numpy.array(token_ids, dtype=numpy.int32)
+    # # Save to disk in .npy format (efficient for memmap)
+    # numpy.save("tokens.npy", dataset)
+
+    # dataset = numpy.load("tokens.npy", mmap_mode="r")  # read-only
+
+    batch = data_loading(
+        dataset=dataset, batch_size=4, context_length=context_length, device="cpu"
+    )
+    print("batch, ", batch[0])
+    for i in range(4):
+        print(i, tokenizer.decode(batch[0][i].tolist()))
+        print("---")
+        print(i, tokenizer.decode(batch[1][i].tolist()))
+        print("---")

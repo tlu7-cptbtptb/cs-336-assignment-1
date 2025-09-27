@@ -1,10 +1,13 @@
+import random
+from typing import Tuple
 
 import numpy as np
 import torch
-from typing import Tuple
-import random
 
-def data_loading(dataset: np.ndarray, batch_size: int, context_length: int, device: str) -> Tuple[torch.Tensor, torch.Tensor]:
+
+def data_loading(
+    dataset: np.ndarray, batch_size: int, context_length: int, device: str
+) -> Tuple[torch.Tensor, torch.Tensor]:
     """
     dataset: 1D numpy array of integer token IDs in the dataset.
 
@@ -18,12 +21,12 @@ def data_loading(dataset: np.ndarray, batch_size: int, context_length: int, devi
     # build sliding windows
 
     # take batch_size sequences for input and next-shifted for target
-
-
     start_idx = [random.randint(0, n_seq - 1) for _ in range(batch_size)]
 
-    x = [dataset[idx:idx+context_length] for idx in start_idx]
+    x = [dataset[idx : idx + context_length] for idx in start_idx]
     x = torch.tensor(x, dtype=torch.long, device=device)
-    y = x + 1
+
+    y = [dataset[idx + 1 : idx + 1 + context_length] for idx in start_idx]
+    y = torch.tensor(y, dtype=torch.long, device=device)
 
     return (x, y)
