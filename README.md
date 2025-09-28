@@ -73,5 +73,12 @@ step,  770 loss,  4.419667720794678
 ...
 ```
 
+**Some ablation studies**
+
+**vanilla v.s. NopE**
+
 ![Alt text](images/vanilla_vs_NoPE.png)
 
+**vanilla v.s. post norm**
+
+![Alt text](images/vanilla_vs_post_norm.png)
