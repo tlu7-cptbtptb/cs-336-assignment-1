@@ -48,3 +48,27 @@ gunzip owt_valid.txt.gz
 cd ..
 ```
 
+
+------------------
+To start a training, run
+```
+tlu7@tlu7-mbp cs-336-assignment-1 % uv run pytest -k test_main
+```
+and you shall see terminal output such as
+```
+...
+step,  735 loss,  4.424985885620117
+step,  740 loss,  4.25531005859375
+-------------------
+step,  740 validation_loss,  tensor(4.3569)
+step,  745 loss,  4.4907755851745605
+step,  750 loss,  4.1905741691589355
+test_output,   the diamond hurt. The seal climb water and shared had no treatrawberriespite0 any trainStop fierce saw her lived happily ever puzzle 'no'. colours saying station place. She said, "Okay, Tim and all of fun. And they were playing with his animals loved to help your own” saying”ought friends.
+step,  755 loss,  3.933206081390381
+step,  760 loss,  4.0448994636535645
+-------------------
+step,  760 validation_loss,  tensor(4.3439)
+step,  765 loss,  4.335960388183594
+step,  770 loss,  4.419667720794678
+...
+```
