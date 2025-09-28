@@ -1,4 +1,5 @@
 import os
+import re
 import typing
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -45,9 +46,13 @@ def load_checkpoint(
     src: str | os.PathLike | typing.BinaryIO | typing.IO[bytes],
     model: torch.nn.Module,
     optimizer: torch.optim.Optimizer,
-) -> int:
+    return_model_and_optimizer: bool = False,
+) -> int | tuple[torch.nn.Module, torch.optim.Optimizer, int]:
     checkpoint = torch.load(src)
     model.load_state_dict(checkpoint["model"])
     optimizer.load_state_dict(checkpoint["optimizer"])
     iteration = checkpoint["iteration"]
-    return iteration
+    if not return_model_and_optimizer:
+        return iteration
+    else:
+        return (model, optimizer, iteration)

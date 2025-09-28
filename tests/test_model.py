@@ -19,6 +19,7 @@ from .adapters import (
     run_transformer_lm,
 )
 from .tokenizer import *
+from .checkpoint_util import load_checkpoint, save_checkpoint
 from .data_loader import data_loading
 from .generate_text_util import generate_text
 from .optimizer import AdamW, gradient_clipping, learning_rate_schedule, SGD
@@ -332,6 +333,34 @@ def generate_text_for_test_input(
     print("test_output, ", test_output)
 
 
+def reload_model_and_optimizer(
+    vocab_size: int,
+    context_length: int,
+    num_layers: int,
+    d_model: int,
+    d_ff: int,
+    num_heads: int,
+    rope_theta: float,
+    max_seq_len: int,
+    src: str,
+):
+    transformer = Transformer(
+        vocab_size=vocab_size,
+        context_length=context_length,
+        num_layers=num_layers,
+        d_model=d_model,
+        d_ff=d_ff,
+        num_heads=num_heads,
+        theta=rope_theta,
+        max_seq_len=context_length,
+    )
+    optimizer = get_optimizer(model=transformer)
+    transformer, optimizer, iteration = load_checkpoint(
+        src=src, model=transformer, optimizer=optimizer, return_model_and_optimizer=True
+    )
+    return transformer, optimizer, iteration
+
+
 def test_main(
     vocab_size: int = 10000,
     context_length: int = 64,
@@ -380,13 +409,8 @@ def test_main(
     )
     optimizer = get_optimizer(model=transformer)
 
-    # sanity check
-    test_input = "Once upon a time, in a warm and sunny place, there was a big pit. A little boy named Tom liked to play near the pit. One day, Tom lost his red ball. He was very sad.\
-                            Tom asked his friend, Sam, to help him search for the ball. "
-    test_input = tokenizer.encode(test_input)
-
     # training loop
-    for step in range(1000):
+    for step in range(50):
         batch = data_loading(
             dataset=dataset, batch_size=4, context_length=context_length, device="cpu"
         )
@@ -397,11 +421,44 @@ def test_main(
         )
         print("loss, ", loss)
 
-        if step % 50 == 0:
-            generate_text_for_test_input(
-                test_input=None,
-                transformer=transformer,
-                tokenizer=tokenizer,
-                end_of_text_token_id=end_of_text_token_id,
-                max_gen_len=64,
-            )
+        # if step % 50 == 0:
+        #     generate_text_for_test_input(
+        #         test_input=None,
+        #         transformer=transformer,
+        #         tokenizer=tokenizer,
+        #         end_of_text_token_id=end_of_text_token_id,
+        #         max_gen_len=64,
+        #     )
+
+    step = 50
+    save_path = (
+        f"""/Users/tlu7/git_proj/stanford_336/cs-336-assignment-1/ckpt/{step}.ckpt"""
+    )
+    save_checkpoint(
+        model=transformer, optimizer=optimizer, iteration=step, out=save_path
+    )
+    print("---------saving model DONE ----------")
+
+    # model and optimizer re-initialization
+    transformer, optimizer, step = reload_model_and_optimizer(
+        vocab_size=vocab_size,
+        context_length=context_length,
+        num_layers=num_layers,
+        d_model=d_model,
+        d_ff=d_ff,
+        num_heads=num_heads,
+        rope_theta=rope_theta,
+        max_seq_len=context_length,
+        src=save_path,
+    )
+
+    print("---------reloading model DONE ----------")
+    batch = data_loading(
+        dataset=dataset, batch_size=4, context_length=context_length, device="cpu"
+    )
+    input = batch[0]
+    target = batch[1]
+    loss = train_step(
+        model=transformer, optimizer=optimizer, input=input, target=target
+    )
+    print("loss, ", loss)
