@@ -551,7 +551,7 @@ def test_main(
                 max_gen_len=64,
             )
 
-    with open("valid_loss.csv", "w", newline="") as f:
+    with open("valid_loss_lr=1e-3_post_norm.csv", "w", newline="") as f:
         writer = csv.writer(f)
         writer.writerow(["step", "loss"])  # header
         writer.writerows(valid_loss_per_step)

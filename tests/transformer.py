@@ -41,6 +41,7 @@ class TransformerBlock(torch.nn.Module):
         self.rope = RotaryPositionalEmbedding(
             d_k=self.d_k, max_seq_len=max_seq_len, theta=theta, device=device
         )
+        # self.rope = None
 
         self.rms1 = RMSNorm(d_model, device=device, dtype=dtype)
 
@@ -52,20 +53,28 @@ class TransformerBlock(torch.nn.Module):
 
         self.swiglu = SwiGLU(d_model, d_ff, device=device, dtype=dtype)
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
+    def forward(self, x: torch.Tensor, pre_norm: bool = True) -> torch.Tensor:
         """
         Process an input tensor of shape
         (batch_size, sequence_length, d_model) and return a tensor of the same shape
+        Note we do a pre-norm here that's
+        - z = x + mha(rms(x))
+        - y = z + ffn(rms(z)) = x + some_fn(x)
         """
         # first half: y = x + MultiHeadSelfAttention(RMSNorm(x))
-        x_norm = self.rms1(x)
-        x = x + self.mha.forward(x_norm, self.rope)
-        # print("tlu7 ... x.shape after 1st half of transformerblock", x.shape)
-        # second half: y = x + ffn(RMSNorm(x))
-        x_norm_2 = self.rms2(x)
-        x = x + self.swiglu(x_norm_2)
-        # print("tlu7 ... x.shape after 2nd half of transformerblock", x.shape)
-        return x
+        if pre_norm:
+            x_norm = self.rms1(x)
+            x = x + self.mha.forward(x_norm, self.rope)
+            # print("tlu7 ... x.shape after 1st half of transformerblock", x.shape)
+            # second half: y = x + ffn(RMSNorm(x))
+            x_norm_2 = self.rms2(x)
+            x = x + self.swiglu(x_norm_2)
+            # print("tlu7 ... x.shape after 2nd half of transformerblock", x.shape)
+            return x
+        else:
+            z = self.rms1(x + self.mha.forward(x, self.rope))
+            y = self.rms2(z + self.swiglu(z))
+            return y
 
 
 class Transformer(torch.nn.Module):
@@ -124,14 +133,11 @@ class Transformer(torch.nn.Module):
         """
         # embedding lookup
         x = self.embedding(x)
-        # print("tlu7 ... x.shape after embedding", x.shape)
         # transformer blocks
         for transformer in self.transformer_blocks:
-            x = transformer(x)
-        # print("tlu7 ... x.shape after transformer", x.shape)
+            x = transformer.forward(x, pre_norm=False)
         # final rms norm
         x = self.rms_norm_final(x)
-        # print("tlu7 ... x.shape after rms_norm_final", x.shape)
         # final linear layer
         x = self.llm_output(x)
         # x = softmax(x, dim=-1)
