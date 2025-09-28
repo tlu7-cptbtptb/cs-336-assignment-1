@@ -41,6 +41,4 @@ def cross_entropy_loss(
     denom = denom + max_logits  # [batch_size, seq_len, 1]
     loss = target_logits - denom  # [batch_size, seq_len, 1]
     loss *= -1  # [batch_size, seq_len, 1]
-    return loss.mean()
-
-
+    return loss.mean()  # this is the per token loss

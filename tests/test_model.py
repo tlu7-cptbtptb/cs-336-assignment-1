@@ -1,3 +1,5 @@
+import csv
+
 import numpy
 import torch
 import torch.nn.functional as F
@@ -515,7 +517,9 @@ def test_main(
     )
 
     # training loop
-    for step in range(100):
+    valid_loss_per_step = []
+
+    for step in range(2000):
         batch = data_loading(
             dataset=train_dataset,
             batch_size=4,
@@ -536,15 +540,21 @@ def test_main(
             )
             print("-------------------")
             print("step, ", step, "validation_loss, ", validation_loss)
+            valid_loss_per_step.append((step, validation_loss.item()))
 
-        # if step % 50 == 0:
-        #     generate_text_for_test_input(
-        #         test_input=None,
-        #         transformer=transformer,
-        #         tokenizer=tokenizer,
-        #         end_of_text_token_id=end_of_text_token_id,
-        #         max_gen_len=64,
-        #     )
+        if step % 50 == 0:
+            generate_text_for_test_input(
+                test_input=None,
+                transformer=transformer,
+                tokenizer=tokenizer,
+                end_of_text_token_id=end_of_text_token_id,
+                max_gen_len=64,
+            )
+
+    with open("valid_loss.csv", "w", newline="") as f:
+        writer = csv.writer(f)
+        writer.writerow(["step", "loss"])  # header
+        writer.writerows(valid_loss_per_step)
 
     step = 50
     save_path = (
