@@ -361,6 +361,94 @@ def reload_model_and_optimizer(
     return transformer, optimizer, iteration
 
 
+def train_bpe_and_save(
+    input_path: str, vocab_size: int, skip_train: bool = True
+) -> tuple[str, str]:
+    prefix = "/Users/tlu7/git_proj/stanford_336/cs-336-assignment-1/"
+    vocab_path = f"{prefix}/vocab.pkl"
+    merges_path = f"{prefix}/merges.pkl"
+    if not skip_train:
+        # tokenizer training
+        vocab, merges = run_train_bpe(
+            input_path=input_path,
+            vocab_size=vocab_size,
+            special_tokens=["<|endoftext|>"],
+        )
+
+        # save vocab
+        with open(vocab_path, "wb") as f:
+            pickle.dump(vocab, f)
+        # save merges
+        with open(merges_path, "wb") as f:
+            pickle.dump(merges, f)
+    return vocab_path, merges_path
+
+
+def load_tokenizer_from_saved_vocab_merges(
+    vocab_path: str,
+    merges_path: str,
+    special_tokens: list[str] | None = None,
+):
+    return Tokenizer.from_files(vocab_path, merges_path, special_tokens)
+
+
+def prepare_train_or_valid_data(
+    corpus_path: str,
+    tokenizer: Any,
+    train_or_valid: str = "train",
+):
+    with open(corpus_path, "r") as f:
+        corpus = f.read()
+    token_ids = tokenizer.encode(corpus)
+    print("len token_ids, ", len(token_ids))
+    if train_or_valid == "train":
+        train_dataset = numpy.array(token_ids, dtype=numpy.int32)
+        # Save to disk in .npy format (efficient for memmap)
+        numpy.save("train_tokens.npy", train_dataset)
+        train_dataset = numpy.load("train_tokens.npy", mmap_mode="r")  # read-only
+        return train_dataset
+    else:
+        validation_dataset = numpy.array(token_ids, dtype=numpy.int32)
+        # Save to disk in .npy format (efficient for memmap)
+        numpy.save("validation_tokens.npy", validation_dataset)
+        validation_dataset = numpy.load(
+            "validation_tokens.npy", mmap_mode="r"
+        )  # read-only
+        return validation_dataset
+
+
+def prepare_valid_data_for_loss(
+    validation_dataset: numpy.ndarray,
+    context_length: int,
+    batches: int = 100,
+) -> list[tuple[torch.Tensor, torch.Tensor]]:
+    result = []
+    for b in range(batches):
+        batch = data_loading(
+            dataset=validation_dataset,
+            batch_size=1,
+            context_length=context_length,
+            device="cpu",
+        )
+        result.append(batch)
+    return result
+
+
+def calculate_validation_loss(
+    model: Transformer, validation_data: list[tuple[torch.Tensor, torch.Tensor]]
+):
+    model.eval()
+    loss_per_batch = []
+    with torch.no_grad():
+        for batch in validation_data:
+            input = batch[0]
+            target = batch[1]
+            predicted_logits = model(input)
+            loss = cross_entropy_loss(predicted_logits, target)
+            loss_per_batch.append(loss.item())
+    return torch.mean(torch.tensor(loss_per_batch))
+
+
 def test_main(
     vocab_size: int = 10000,
     context_length: int = 64,
@@ -369,29 +457,39 @@ def test_main(
     rope_theta: float = 10000.0,
     num_layers: int = 4,
     num_heads: int = 16,
+    data_already_tokenized: bool = True,
 ):
-    # tokenizer training
-    input_path = "/Users/tlu7/git_proj/stanford_336/cs-336-assignment-1/data/TinyStoriesV2-GPT4-train_100.txt"
-    vocab, merges = run_train_bpe(
-        input_path=input_path, vocab_size=vocab_size, special_tokens=["<|endoftext|>"]
+    prefix = "/Users/tlu7/git_proj/stanford_336/cs-336-assignment-1/data"
+    train_path = f"{prefix}/TinyStoriesV2-GPT4-train_10000.txt"
+    validation_path = f"{prefix}/TinyStoriesV2-GPT4-valid.txt"
+    # tokenizer = get_tokenizer(vocab, merges, special_tokens=["<|endoftext|>"])
+    vocab_path, merges_path = train_bpe_and_save(
+        input_path=train_path, vocab_size=vocab_size, skip_train=True
     )
-    tokenizer = get_tokenizer(vocab, merges, special_tokens=["<|endoftext|>"])
+    tokenizer = load_tokenizer_from_saved_vocab_merges(
+        vocab_path=vocab_path,
+        merges_path=merges_path,
+        special_tokens=["<|endoftext|>"],
+    )
+    vocab = tokenizer.vocab
+
     end_of_text_token_id = None
     for i in range(len(vocab)):
         if vocab[i] == "<|endoftext|>".encode("utf-8"):
             end_of_text_token_id = i
             break
-
-    with open(input_path, "r") as f:
-        corpus = f.read()
-    token_ids = tokenizer.encode(corpus)
-    print("len token_ids, ", len(token_ids))
-
-    dataset = numpy.array(token_ids, dtype=numpy.int32)
-    # Save to disk in .npy format (efficient for memmap)
-    numpy.save("tokens.npy", dataset)
-
-    dataset = numpy.load("tokens.npy", mmap_mode="r")  # read-only
+    if data_already_tokenized:
+        train_dataset = numpy.load("train_tokens.npy", mmap_mode="r")  # read-only
+        validation_dataset = numpy.load(
+            "validation_tokens.npy", mmap_mode="r"
+        )  # read-only
+    else:
+        train_dataset = prepare_train_or_valid_data(
+            corpus_path=train_path, tokenizer=tokenizer
+        )
+        validation_dataset = prepare_train_or_valid_data(
+            corpus_path=validation_path, tokenizer=tokenizer, train_or_valid="valid"
+        )
 
     # sanity check
     # test_load_one_batch(dataset, tokenizer, context_length=context_length)
@@ -409,17 +507,35 @@ def test_main(
     )
     optimizer = get_optimizer(model=transformer)
 
+    # prepare validation data (sample a large number of batches from the full validation dataset)
+    valid_data = prepare_valid_data_for_loss(
+        validation_dataset=validation_dataset,
+        context_length=context_length,
+        batches=100,
+    )
+
     # training loop
-    for step in range(50):
+    for step in range(100):
         batch = data_loading(
-            dataset=dataset, batch_size=4, context_length=context_length, device="cpu"
+            dataset=train_dataset,
+            batch_size=4,
+            context_length=context_length,
+            device="cpu",
         )
         input = batch[0]
         target = batch[1]
         loss = train_step(
             model=transformer, optimizer=optimizer, input=input, target=target
         )
-        print("loss, ", loss)
+        if step % 5 == 0:
+            print("step, ", step, "loss, ", loss)
+
+        if step % 20 == 0:
+            validation_loss = calculate_validation_loss(
+                model=transformer, validation_data=valid_data
+            )
+            print("-------------------")
+            print("step, ", step, "validation_loss, ", validation_loss)
 
         # if step % 50 == 0:
         #     generate_text_for_test_input(
@@ -438,27 +554,3 @@ def test_main(
         model=transformer, optimizer=optimizer, iteration=step, out=save_path
     )
     print("---------saving model DONE ----------")
-
-    # model and optimizer re-initialization
-    transformer, optimizer, step = reload_model_and_optimizer(
-        vocab_size=vocab_size,
-        context_length=context_length,
-        num_layers=num_layers,
-        d_model=d_model,
-        d_ff=d_ff,
-        num_heads=num_heads,
-        rope_theta=rope_theta,
-        max_seq_len=context_length,
-        src=save_path,
-    )
-
-    print("---------reloading model DONE ----------")
-    batch = data_loading(
-        dataset=dataset, batch_size=4, context_length=context_length, device="cpu"
-    )
-    input = batch[0]
-    target = batch[1]
-    loss = train_step(
-        model=transformer, optimizer=optimizer, input=input, target=target
-    )
-    print("loss, ", loss)
