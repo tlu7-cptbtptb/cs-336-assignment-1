@@ -72,3 +72,6 @@ step,  765 loss,  4.335960388183594
 step,  770 loss,  4.419667720794678
 ...
 ```
+
+![Alt text](images/vanilla_vs_NoPE.png)
+
