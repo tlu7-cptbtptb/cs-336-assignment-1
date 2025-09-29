@@ -135,7 +135,7 @@ class Transformer(torch.nn.Module):
         x = self.embedding(x)
         # transformer blocks
         for transformer in self.transformer_blocks:
-            x = transformer.forward(x, pre_norm=False)
+            x = transformer.forward(x, pre_norm=True)
         # final rms norm
         x = self.rms_norm_final(x)
         # final linear layer

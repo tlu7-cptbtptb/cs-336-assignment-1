@@ -508,7 +508,7 @@ def test_main(
         max_seq_len=context_length,
     )
     optimizer = get_optimizer(model=transformer)
-
+    compiled_model = torch.compile(transformer)
     # prepare validation data (sample a large number of batches from the full validation dataset)
     valid_data = prepare_valid_data_for_loss(
         validation_dataset=validation_dataset,
@@ -529,7 +529,7 @@ def test_main(
         input = batch[0]
         target = batch[1]
         loss = train_step(
-            model=transformer, optimizer=optimizer, input=input, target=target
+            model=compiled_model, optimizer=optimizer, input=input, target=target
         )
         if step % 5 == 0:
             print("step, ", step, "loss, ", loss)
